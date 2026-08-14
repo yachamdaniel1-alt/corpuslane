@@ -36,7 +36,7 @@ and the [Freighter](https://freighter.app) wallet extension.
 
 ```bash
 cd contract
-cargo test --features testutils    # 21 unit tests + doc tests
+cargo test --features testutils    # 23 unit tests + doc tests
 cargo build-wasm                  # target/wasm32v1-none/release/corpuslane.wasm
 ```
 
@@ -76,7 +76,8 @@ account. See [DEPLOYMENT.md](DEPLOYMENT.md).
 - **Record usage** (PerQuery) — accrued at `price` per unit.
 - **Settle** — per-epoch licenses accrue elapsed epochs first, then the owed
   balance is pulled from the licensee&apos;s token allowance to the owner.
-- **Revoke** — owner-only; stops further usage/settlement on the license.
+- **Revoke** — owner-only; stops further usage and freezes the PerEpoch clock,
+  while royalties already accrued remain collectable via `settle`.
 - **Delegate an attestor** — the dataset owner can name a trusted reporter
   allowed to record usage, moving metering off pure self-reporting.
 

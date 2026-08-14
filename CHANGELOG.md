@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release.
 
+### Fixed (post-release hardening)
+- **T1 — revoked-license settlement**: `settle` no longer panics on revoked
+  licenses. Royalties accrued before revocation remain collectable by the
+  owner, and the PerEpoch clock is frozen at revocation so nothing further
+  accrues. `record_usage` still rejects revoked licenses. Updated the
+  `settle`/`revoke_license` docstrings, README, and SECURITY.md (the
+  "revoked-license settlement discrepancy" known issue is resolved).
+- **T2 — backend smoke tests**: added an in-memory test store + supertest
+  suite (`backend/src/__tests__/api.test.ts`) covering `/health`,
+  `/api/datasets` pagination/filtering/404, and `/api/licenses/:id` 400/404.
+  `npm test` now enforces real tests (no more `--passWithNoTests`).
+
 ### Added
 - **Contract** (`contract/`):
   - `register_dataset`, `purchase_license`, `record_usage`, `settle`,
@@ -18,7 +30,7 @@ Initial release.
     so dataset and license ids cannot collide in ledger storage.
   - Events: `DatasetRegistered`, `LicensePurchased`, `UsageRecorded`,
     `LicenseSettled`, `LicenseRevoked`, `AttestorSet`.
-  - 21 unit tests + doc tests (`cargo test --features testutils`).
+  - 23 unit tests + doc tests (`cargo test --features testutils`).
   - Pinned `soroban-sdk = 27.0.6`; wasm build alias for `wasm32v1-none`.
 - **Backend** (`backend/`):
   - Read-only Express API: `GET /health`, `GET /api/datasets`,

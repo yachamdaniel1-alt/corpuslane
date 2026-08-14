@@ -241,29 +241,33 @@ impl Corpuslane {
     /// the caller never touches them.
     ///
     /// For PerEpoch licenses, this first accrues the epochs that have elapsed
-    /// since the previous settlement.
+    /// since the previous settlement. Revoked licenses are frozen: no further
+    /// epochs accrue, but royalties accrued before revocation remain
+    /// collectable here.
+    ///
+    /// Panics with "No balance to settle" when there is nothing to collect.
     ///
     /// Returns the amount transferred.
     pub fn settle(env: Env, license_id: u64, caller: Address) -> i128 {
         caller.require_auth();
 
         let mut license = require_license(&env, license_id);
-        if license.status != LicenseStatus::Active {
-            panic!("License is revoked");
-        }
 
         let dataset = require_dataset(&env, &license.dataset_id);
 
         // Accrue elapsed epochs for PerEpoch licenses before pulling funds.
-        if let LicenseTerms::PerEpoch(price, epoch_seconds) = license.terms {
-            let now = env.ledger().timestamp();
-            let base = license.last_settle_timestamp;
-            let elapsed = now.saturating_sub(base);
-            let epochs = elapsed / epoch_seconds;
-            if epochs > 0 {
-                let accrued = (epochs as i128) * price;
-                license.last_settle_timestamp = base + epochs * epoch_seconds;
-                license.payable += accrued;
+        // Revoked licenses no longer accrue: the clock is frozen at revocation.
+        if license.status == LicenseStatus::Active {
+            if let LicenseTerms::PerEpoch(price, epoch_seconds) = license.terms {
+                let now = env.ledger().timestamp();
+                let base = license.last_settle_timestamp;
+                let elapsed = now.saturating_sub(base);
+                let epochs = elapsed / epoch_seconds;
+                if epochs > 0 {
+                    let accrued = (epochs as i128) * price;
+                    license.last_settle_timestamp = base + epochs * epoch_seconds;
+                    license.payable += accrued;
+                }
             }
         }
 
@@ -295,10 +299,10 @@ impl Corpuslane {
 
     /// Revokes a license owned by `dataset_id`.
     ///
-    /// Owner-only. Once revoked, all further `record_usage` and `settle`
-    /// calls on the license are rejected. Any already-accrued payable remains
-    /// claimable by the owner via `settle` (revocation does not destroy
-    /// earned royalties).
+    /// Owner-only. Once revoked, `record_usage` is rejected and no further
+    /// royalties accrue (the PerEpoch clock is frozen). Any already-accrued
+    /// payable remains claimable by the owner via `settle` — revocation does
+    /// not destroy earned royalties.
     pub fn revoke_license(env: Env, dataset_id: BytesN<32>, caller: Address, license_id: u64) {
         caller.require_auth();
         let dataset = require_dataset(&env, &dataset_id);
@@ -796,7 +800,7 @@ mod tests {
     // ----------------------------------------------------------------------
 
     #[test]
-    fn test_revoked_license_rejects_usage_and_settle() {
+    fn test_revoked_license_rejects_usage() {
         let ctx = setup();
         let client = ctx_client(&ctx);
         let did = dataset_id(&ctx.env, 1);
@@ -819,12 +823,75 @@ mod tests {
             client.record_usage(&license_id, &ctx.licensee, &1_u32);
         }));
         assert!(res.is_err());
+    }
 
-        // settle must also be rejected on a revoked license (spec behavior).
+    #[test]
+    fn test_revoked_license_settles_accrued_payable() {
+        let ctx = setup();
+        let client = ctx_client(&ctx);
+        let did = dataset_id(&ctx.env, 1);
+        client.register_dataset(
+            &ctx.owner,
+            &did,
+            &metadata_id(&ctx.env, 2),
+            &LicenseTerms::PerQuery(5),
+        );
+        fund_and_approve(&ctx, &ctx.licensee, 1000);
+        let license_id = client.purchase_license(&did, &ctx.licensee, &ctx.token, &0);
+
+        client.record_usage(&license_id, &ctx.licensee, &3_u32);
+        client.revoke_license(&did, &ctx.owner, &license_id);
+
+        // Royalties accrued before revocation remain collectable by the owner.
+        let settled = client.settle(&license_id, &ctx.stranger);
+        assert_eq!(settled, 15);
+        assert_eq!(balance_of(&ctx, &ctx.owner), 15);
+
+        let lic = client.get_license(&license_id);
+        assert_eq!(lic.status, LicenseStatus::Revoked);
+        assert_eq!(lic.payable, 0);
+        assert_eq!(lic.settled_total, 15);
+
+        // Nothing left to settle.
         let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             client.settle(&license_id, &ctx.stranger);
         }));
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_revoked_per_epoch_does_not_accrue_after_revocation() {
+        let ctx = setup();
+        let client = ctx_client(&ctx);
+        let did = dataset_id(&ctx.env, 1);
+        client.register_dataset(
+            &ctx.owner,
+            &did,
+            &metadata_id(&ctx.env, 2),
+            &LicenseTerms::PerEpoch(10, 100),
+        );
+        fund_and_approve(&ctx, &ctx.licensee, 100_000);
+
+        let t0 = 1_000_000u64;
+        ctx.env.ledger().set_timestamp(t0);
+        let license_id = client.purchase_license(&did, &ctx.licensee, &ctx.token, &0);
+
+        // One epoch elapses and is settled before revocation.
+        ctx.env.ledger().set_timestamp(t0 + 150);
+        let settled = client.settle(&license_id, &ctx.stranger);
+        assert_eq!(settled, 10);
+        assert_eq!(balance_of(&ctx, &ctx.owner), 10);
+
+        client.revoke_license(&did, &ctx.owner, &license_id);
+
+        // Time advances well past more epoch boundaries, but the clock is
+        // frozen at revocation: settle must not accrue anything further.
+        ctx.env.ledger().set_timestamp(t0 + 1000);
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            client.settle(&license_id, &ctx.stranger);
+        }));
+        assert!(res.is_err(), "revoked PerEpoch license must not accrue");
+        assert_eq!(balance_of(&ctx, &ctx.owner), 10);
     }
 
     #[test]

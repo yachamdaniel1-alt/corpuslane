@@ -20,7 +20,7 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 
 ## Trivial (100 points)
 
-### T1 — Align `revoke_license` settlement documentation with behavior
+### ~~T1 — Align `revoke_license` settlement documentation with behavior~~ ✅ resolved
 
 `revoke_license` (contract/src/contract.rs) says "any already-accrued payable
 remains claimable by the owner via settle", but `settle` rejects revoked
@@ -37,7 +37,11 @@ then make the code and the docstring agree:
 Acceptance: `cargo test --features testutils` passes and SECURITY.md no longer
 lists "Revoked-license settlement discrepancy".
 
-### T2 — Add a backend API smoke test
+> **Status**: Done. `settle` accepts revoked licenses and settles their accrued
+> payable; the PerEpoch clock is frozen at revocation. Tests, README, and
+> SECURITY.md updated (23 contract tests pass). Keep this issue closed.
+
+### ~~T2 — Add a backend API smoke test~~ ✅ resolved
 
 The backend currently has no tests (`npm test` passes via
 `--passWithNoTests`). Add a jest test that boots the Express app against an
@@ -51,6 +55,10 @@ in-memory Prisma store and asserts:
 Follow the existing `ts-jest` config in `backend/jest.config.js`.
 
 Acceptance: `cd backend && npm test` runs real tests that pass.
+
+> **Status**: Done. `backend/src/__tests__/api.test.ts` boots the real Express
+> app against an in-memory store (supertest); 10 tests pass and `npm test` no
+> longer uses `--passWithNoTests`. Keep this issue closed.
 
 ## Medium (150 points)
 

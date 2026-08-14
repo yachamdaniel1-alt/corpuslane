@@ -60,33 +60,30 @@ meter-trust framework: the *accounting and flow of funds* are trustless; the
   over-pay into an account.
 - `settle` pays `payable` to the dataset owner only; the settling caller
   receives nothing, so there is no incentive to grief-settle or steal.
-- Revocation does not destroy accrued `payable` semantics as documented; note
-  that the current `settle` rejects revoked licenses (see Known issues).
+- Revocation does not destroy accrued `payable`: `settle` remains callable on
+  a revoked license to collect royalties earned before revocation, but the
+  PerEpoch clock is frozen at revocation so nothing further accrues.
 
 ## Known issues / hardening backlog
 
-1. **Revoked-license settlement discrepancy.** The `revoke_license` docstring
-   says accrued royalties remain claimable, but `settle` panics on revoked
-   licenses. Decide which is intended and align the contract. (Tests pass
-   against current behavior.)
-2. **PerEpoch clock.** Epochs accrue at settlement time based on
+1. **PerEpoch clock.** Epochs accrue at settlement time based on
    `last_settle_timestamp`. A long gap between settlements front-loads the
    count (late settles catch up), which is fine, but the timestamp comes from
    ledger time — acceptable on a ledger you trust.
-3. **No pause / emergency stop.** There is no kill switch. If a flaw is found
+2. **No pause / emergency stop.** There is no kill switch. If a flaw is found
    the only remedy is redeploying a new contract and pointing the frontend at
    it; existing licenses remain.
-4. **Denial-of-service by spam.** `record_usage` and `settle` are cheap for
+3. **Denial-of-service by spam.** `record_usage` and `settle` are cheap for
    anyone to call subject to auth; settlement `transfer_from` requires an
    allowance. Consider rate/cost modeling on high-throughput datasets.
-5. **Re-entrancy.** Soroban's synchronous execution model prevents the classic
+4. **Re-entrancy.** Soroban's synchronous execution model prevents the classic
    cross-contract re-entrancy that plagues EVM chains (no `delegatecall`, no
    re-entry into the same invocation frame), so this is not exploitable here.
    `settle` nevertheless applies Checks-Effects-Interactions: it commits the
    accounting change before the external token `transfer_from` (contract.rs).
    If the token is a custom SEP-41 contract rather than a SAC, review its
    behavior before relying on it.
-6. **State expiration / rent (TTL).** Soroban ledger entries expire unless
+5. **State expiration / rent (TTL).** Soroban ledger entries expire unless
    their TTL is refreshed. The contract extends the TTL of every dataset /
    license / attestor entry on each write (`TTL_EXTEND_TO = 1_000_000` ledgers,
    storage.rs). For long-lived deployments a keep-alive bot should still bump
@@ -95,7 +92,7 @@ meter-trust framework: the *accounting and flow of funds* are trustless; the
    reliable security boundary (extension is permissionless); never rely on it
    for authorization or expiration logic. The contract uses ledger timestamps,
    not TTL, for epoch accounting, which is the recommended pattern.
-7. **Off-chain indexer.** The indexer never writes to the ledger, so a
+6. **Off-chain indexer.** The indexer never writes to the ledger, so a
    compromise of the backend cannot spend funds — but it can display wrong
    data. Verify ledger state directly (`get_license`, `get_dataset`) before
    high-value decisions.
