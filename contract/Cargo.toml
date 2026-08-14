@@ -1,0 +1,22 @@
+[package]
+name = "corpuslane"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Corpuslane — licensing and usage-metered royalty protocol for AI training datasets"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { version = "=27.0.6", default-features = false }
+
+[features]
+testutils = ["soroban-sdk/testutils"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+
+[profile.test]
+opt-level = "s"

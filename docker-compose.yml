@@ -1,0 +1,76 @@
+# Corpuslane local stack: PostgreSQL + indexer + API + web dashboard.
+#
+# Copy the repository and set environment variables (or keep defaults for
+# Soroban testnet). Run:  docker compose up --build
+#
+# Required for on-chain flows (leave empty until a contract is deployed):
+#   CONTRACT_ID            C… address of the deployed Corpuslane contract
+#   NEXT_PUBLIC_CONTRACT_ID  same value, passed to the Next.js frontend
+#
+# See DEPLOYMENT.md for the end-to-end deployment guide.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: corpuslane
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-corpuslane}
+      POSTGRES_DB: corpuslane
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U corpuslane -d corpuslane"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  indexer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    command: sh -c "node dist/indexer.js"
+    environment:
+      DATABASE_URL: postgresql://corpuslane:${POSTGRES_PASSWORD:-corpuslane}@db:5432/corpuslane?schema=public
+      SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org:443}
+      SOROBAN_NETWORK_PASSPHRASE: ${SOROBAN_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      CONTRACT_ID: ${CONTRACT_ID:-}
+      INDEXER_POLL_INTERVAL_MS: ${INDEXER_POLL_INTERVAL_MS:-5000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend
+    command: sh -c "npx prisma db push && node dist/index.js"
+    environment:
+      DATABASE_URL: postgresql://corpuslane:${POSTGRES_PASSWORD:-corpuslane}@db:5432/corpuslane?schema=public
+      PORT: 3001
+      SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org:443}
+      SOROBAN_NETWORK_PASSPHRASE: ${SOROBAN_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      CONTRACT_ID: ${CONTRACT_ID:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      NEXT_PUBLIC_CONTRACT_ID: ${CONTRACT_ID:-}
+      NEXT_PUBLIC_SOROBAN_RPC_URL: ${SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org:443}
+      NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE: ${SOROBAN_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

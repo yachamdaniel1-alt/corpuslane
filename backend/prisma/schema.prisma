@@ -1,0 +1,114 @@
+// Prisma schema for the Corpuslane read-only index.
+//
+// Amounts are stored as strings: contract amounts are i128, which exceeds
+// PostgreSQL's int8 in the general case. Callers are expected to convert to
+// the correct decimal places for the token used by a license. See API.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Dataset {
+  id            String    @id // hex-encoded BytesN<32> dataset id
+  owner         String // G... address of the dataset owner
+  metadataHash  String // hex-encoded BytesN<32> off-chain metadata content-address
+  licenseType   String // Flat | PerQuery | PerEpoch
+  price         String // i128, smallest token units
+  epochSeconds  Int? // PerEpoch only
+  registeredAt  DateTime
+  ledgerSeq     Int?
+  txHash        String?
+  licenses      License[]
+
+  @@map("datasets")
+}
+
+model License {
+  id                Int        @id // on-chain u64 license id
+  datasetId         String
+  licensee          String // G... or C... address
+  token             String // C... token contract address
+  termsType         String // Flat | PerQuery | PerEpoch
+  price             String // i128, smallest token units
+  epochSeconds      Int? // PerEpoch only
+  status            String // Active | Revoked
+  purchasedAt       DateTime
+  usageCount        BigInt
+  payable           String // current accrued (unenforced) payable, i128
+  settledTotal      String // cumulative settled, i128
+  lastSettleTs      BigInt // epoch boundary timestamp
+  dataset           Dataset @relation(fields: [datasetId], references: [id])
+  usageRecords      UsageRecord[]
+  settlements       Settlement[]
+  revocation        LicenseRevocation?
+
+  @@map("licenses")
+}
+
+model UsageRecord {
+  id          BigInt   @id @default(autoincrement())
+  licenseId   Int
+  licensee    String
+  reporter    String // the caller that invoked record_usage
+  usageCount  BigInt
+  delta       String // accrual added to payable, i128
+  recordedAt  DateTime
+  ledgerSeq   Int?
+  txHash      String?
+  license     License @relation(fields: [licenseId], references: [id])
+
+  @@index([licenseId])
+  @@map("usage_records")
+}
+
+model Settlement {
+  id         BigInt   @id @default(autoincrement())
+  licenseId  Int
+  license    License  @relation(fields: [licenseId], references: [id])
+  amount     String // i128
+  caller     String
+  settledAt  DateTime
+  ledgerSeq  Int?
+  txHash     String?
+
+  @@index([licenseId])
+  @@map("settlements")
+}
+
+model LicenseRevocation {
+  id         BigInt   @id @default(autoincrement())
+  licenseId  Int      @unique
+  license    License  @relation(fields: [licenseId], references: [id])
+  revokedBy  String
+  revokedAt  DateTime
+  ledgerSeq  Int?
+  txHash     String?
+}
+
+model Event {
+  id        String   @id // `${txHash}:${eventIndex}`
+  eventType String
+  contractId String
+  ledgerSeq Int
+  txHash    String
+  createdAt DateTime
+  topicJson String // JSON-serialized scVal-nativized topics (trimmed)
+  dataJson  String // JSON-serialized scVal-nativized data payload
+
+  @@index([eventType])
+  @@index([ledgerSeq])
+  @@map("events")
+}
+
+model IndexerState {
+  id       Int     @id @default(1)
+  cursor   String?
+  updatedAt DateTime @updatedAt
+
+  @@map("indexer_state")
+}
