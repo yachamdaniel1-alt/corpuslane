@@ -79,7 +79,34 @@ export function postNative(value: unknown): unknown {
   return value;
 }
 
+/**
+ * Decode a Soroban `LicenseTerms` enum into the decoupled form.
+ *
+ * `scValToNative` decodes a contract enum as `[Variant, fields...]`, e.g.
+ * `["PerQuery","5"]` or `["PerEpoch",["10",100]]`. Accepts that array form
+ * (and the object form as a defensive fallback).
+ */
 export function parseTerms(native: unknown): LicenseTermsNative | undefined {
+  if (Array.isArray(native)) {
+    if (!["Flat", "PerQuery", "PerEpoch"].includes(String(native[0] ?? ""))) {
+      return undefined;
+    }
+    const type = String(native[0]) as LicenseType;
+    const fields = native[1];
+    if (type === "PerEpoch") {
+      if (Array.isArray(fields)) {
+        return { type, price: String(fields[0] ?? "0"), epochSeconds: Number(fields[1] ?? 0) };
+      }
+      const f = (fields ?? {}) as Record<string, unknown>;
+      return {
+        type,
+        price: String(f.price ?? "0"),
+        epochSeconds: f.epochSeconds != null ? Number(f.epochSeconds) : undefined,
+      };
+    }
+    // Flat / PerQuery carry a single i128 payload.
+    return { type, price: String(fields ?? "0") };
+  }
   if (native === null || typeof native !== "object") {
     return undefined;
   }
@@ -316,6 +343,9 @@ export async function applyEvent(prisma: PrismaClient, ev: ParsedEvent): Promise
     }
     case "UsageRecorded": {
       if (ev.licenseId == null || ev.caller == null) return;
+      // Idempotency: the owning event id is unique on UsageRecord.
+      const existing = await prisma.usageRecord.findUnique({ where: { eventId: ev.id } });
+      if (existing) return;
       const license = await prisma.license.findUnique({ where: { id: ev.licenseId } });
       if (!license) return;
       const usage = BigInt(ev.usageCount ?? 0);
@@ -323,6 +353,7 @@ export async function applyEvent(prisma: PrismaClient, ev: ParsedEvent): Promise
       await prisma.$transaction([
         prisma.usageRecord.create({
           data: {
+            eventId: ev.id,
             licenseId: ev.licenseId,
             licensee: license.licensee,
             reporter: ev.caller,
@@ -345,6 +376,9 @@ export async function applyEvent(prisma: PrismaClient, ev: ParsedEvent): Promise
     }
     case "LicenseSettled": {
       if (ev.licenseId == null || ev.caller == null || ev.amount == null) return;
+      // Idempotency: the owning event id is unique on Settlement.
+      const existing = await prisma.settlement.findUnique({ where: { eventId: ev.id } });
+      if (existing) return;
       const license = await prisma.license.findUnique({ where: { id: ev.licenseId } });
       if (!license) return;
       const amount = BigInt(ev.amount);
@@ -359,6 +393,7 @@ export async function applyEvent(prisma: PrismaClient, ev: ParsedEvent): Promise
       await prisma.$transaction([
         prisma.settlement.create({
           data: {
+            eventId: ev.id,
             licenseId: ev.licenseId,
             amount: amount.toString(),
             caller: ev.caller,

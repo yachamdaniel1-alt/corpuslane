@@ -52,6 +52,7 @@ model License {
 
 model UsageRecord {
   id          BigInt   @id @default(autoincrement())
+  eventId     String   @unique // owning UsageRecorded event (indexer idempotency)
   licenseId   Int
   licensee    String
   reporter    String // the caller that invoked record_usage
@@ -68,6 +69,7 @@ model UsageRecord {
 
 model Settlement {
   id         BigInt   @id @default(autoincrement())
+  eventId    String   @unique // owning LicenseSettled event (indexer idempotency)
   licenseId  Int
   license    License  @relation(fields: [licenseId], references: [id])
   amount     String // i128

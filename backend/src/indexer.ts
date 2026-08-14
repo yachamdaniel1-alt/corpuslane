@@ -14,6 +14,10 @@ const SOROBAN_RPC = process.env.SOROBAN_RPC_URL ?? "http://localhost:8000/soroba
 const CONTRACT_ID = process.env.CONTRACT_ID ?? "";
 const POLL_INTERVAL_MS = parseInt(process.env.INDEXER_POLL_INTERVAL_MS ?? "5000", 10);
 const PAGE_SIZE = 100;
+// When the indexer has no cursor yet, start this many ledgers behind the tip.
+// Soroban RPC rejects startLedger values outside its retention window, so a
+// blind 0 (or the deploy ledger) cannot be used on a fresh index.
+const INITIAL_LOOKBACK_LEDGERS = 1000;
 
 if (!CONTRACT_ID) {
   logger.warn("CONTRACT_ID is not set; indexer will not match any events");
@@ -26,8 +30,14 @@ const rpc = new SorobanRpc.Server(SOROBAN_RPC, { allowHttp: SOROBAN_RPC.startsWi
  * Returns whether there may be more events to fetch immediately.
  */
 async function processPage(cursor: string | null): Promise<boolean> {
+  let startLedger: number | undefined;
+  if (!cursor) {
+    const latest = await rpc.getLatestLedger();
+    startLedger = Math.max(1, latest.sequence - INITIAL_LOOKBACK_LEDGERS);
+  }
+
   const response = await rpc.getEvents({
-    startLedger: cursor ? undefined : 0,
+    startLedger,
     cursor: cursor ?? undefined,
     limit: PAGE_SIZE,
     filters: [{ type: "contract", contractIds: [CONTRACT_ID] }],
@@ -53,7 +63,10 @@ async function processPage(cursor: string | null): Promise<boolean> {
 
   if (events.length > 0) {
     const last = events[events.length - 1];
-    await setIndexerCursor(prisma, last.pagingToken);
+    // stellar-sdk v12 events carry their paging token in `id` (the
+    // `pagingToken` field is not populated); passing `id` to getEvents
+    // resumes from that exact event.
+    await setIndexerCursor(prisma, last.id);
   }
 
   logger.info(
