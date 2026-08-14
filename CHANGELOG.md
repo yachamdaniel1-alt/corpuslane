@@ -31,6 +31,12 @@ Initial release.
   `LicenseTerms` enum but `scValToNative` yields `[Variant, fields...]`.
   `UsageRecord`/`Settlement` now carry a unique `eventId` so re-indexing is
   idempotent. `scripts/deploy-testnet.sh` was updated to the `stellar` CLI.
+- **H1 — property tests**: added a deterministic randomized harness
+  (`prop_per_query_accounting_invariants_randomized`, 500 steps) asserting
+  `settled_total + payable == total_earned`, `payable <= usage_count * price`,
+  and non-negative accounting; `prop_flat_license_never_accrues`; and
+  `prop_per_epoch_settled_total_is_monotonic` including the revocation freeze.
+  26 contract tests now pass.
 
 ### Added
 - **Contract** (`contract/`):
@@ -41,7 +47,7 @@ Initial release.
     so dataset and license ids cannot collide in ledger storage.
   - Events: `DatasetRegistered`, `LicensePurchased`, `UsageRecorded`,
     `LicenseSettled`, `LicenseRevoked`, `AttestorSet`.
-  - 23 unit tests + doc tests (`cargo test --features testutils`).
+  - 26 unit tests + doc tests (`cargo test --features testutils`).
   - Pinned `soroban-sdk = 27.0.6`; wasm build alias for `wasm32v1-none`.
 - **Backend** (`backend/`):
   - Read-only Express API: `GET /health`, `GET /api/datasets`,

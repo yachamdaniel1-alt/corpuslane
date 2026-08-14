@@ -936,6 +936,180 @@ mod tests {
     }
 
     // ----------------------------------------------------------------------
+    // Property tests (H1) — accounting invariants over randomized sequences
+    // ----------------------------------------------------------------------
+
+    /// Deterministic PRNG (xorshift-style) so the "fuzz" runs are reproducible.
+    fn rng_state() -> impl FnMut() -> u64 {
+        let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
+        move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        }
+    }
+
+    #[test]
+    fn prop_per_query_accounting_invariants_randomized() {
+        let ctx = setup();
+        let client = ctx_client(&ctx);
+        let did = dataset_id(&ctx.env, 1);
+        client.register_dataset(
+            &ctx.owner,
+            &did,
+            &metadata_id(&ctx.env, 2),
+            &LicenseTerms::PerQuery(7),
+        );
+        fund_and_approve(&ctx, &ctx.licensee, 10_000_000);
+        let license_id = client.purchase_license(&did, &ctx.licensee, &ctx.token, &0);
+
+        const PRICE: i128 = 7;
+        let mut rand = rng_state();
+        let mut total_delta: i128 = 0;
+
+        for _ in 0..500 {
+            let roll = rand() % 4;
+            match roll {
+                0 | 1 => {
+                    // Record usage (0..=60 units).
+                    let units = (rand() % 61) as u32;
+                    let delta = (units as i128) * PRICE;
+                    client.record_usage(&license_id, &ctx.licensee, &units);
+                    total_delta += delta;
+                }
+                2 => {
+                    // Settle; may panic when there is nothing to collect.
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        client.settle(&license_id, &ctx.stranger);
+                    }));
+                }
+                _ => {
+                    // Occasionally record usage right before settling.
+                    let units = (rand() % 13) as u32;
+                    let delta = (units as i128) * PRICE;
+                    client.record_usage(&license_id, &ctx.licensee, &units);
+                    total_delta += delta;
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        client.settle(&license_id, &ctx.stranger);
+                    }));
+                }
+            }
+
+            let lic = client.get_license(&license_id);
+            // Invariant 1: nothing is ever created or destroyed —
+            // settled_total + pending payable == total reported earnings.
+            assert_eq!(
+                lic.payable + lic.settled_total,
+                total_delta,
+                "settled + payable must equal total earned (payable={}, settled={}, total={})",
+                lic.payable,
+                lic.settled_total,
+                total_delta
+            );
+            // Invariant 2: payable can never exceed usage_count * price.
+            assert!(
+                lic.payable <= (lic.usage_count as i128) * PRICE,
+                "payable {} exceeds usage {} * price {PRICE}",
+                lic.payable,
+                lic.usage_count
+            );
+            // Invariant 3: accounting never goes negative.
+            assert!(lic.payable >= 0, "payable went negative");
+            assert!(lic.settled_total >= 0, "settled_total went negative");
+        }
+    }
+
+    #[test]
+    fn prop_flat_license_never_accrues() {
+        let ctx = setup();
+        let client = ctx_client(&ctx);
+        let did = dataset_id(&ctx.env, 1);
+        client.register_dataset(
+            &ctx.owner,
+            &did,
+            &metadata_id(&ctx.env, 2),
+            &LicenseTerms::Flat(100),
+        );
+        fund_and_approve(&ctx, &ctx.licensee, 1000);
+        let license_id = client.purchase_license(&did, &ctx.licensee, &ctx.token, &100);
+
+        let mut rand = rng_state();
+        for _ in 0..100 {
+            // Usage recording is rejected for flat licenses.
+            let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                client.record_usage(&license_id, &ctx.licensee, &(1_u32 + (rand() % 10) as u32));
+            }));
+            assert!(res.is_err(), "flat licenses must reject record_usage");
+            // A flat license can never accrue payable or metered usage.
+            let lic = client.get_license(&license_id);
+            assert_eq!(lic.payable, 0);
+            assert_eq!(lic.usage_count, 0);
+            assert_eq!(lic.settled_total, 100);
+        }
+        // Settling a flat license has nothing to pay out.
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            client.settle(&license_id, &ctx.stranger);
+        }));
+        assert!(res.is_err(), "flat licenses must have nothing to settle");
+    }
+
+    #[test]
+    fn prop_per_epoch_settled_total_is_monotonic() {
+        let ctx = setup();
+        let client = ctx_client(&ctx);
+        let did = dataset_id(&ctx.env, 1);
+        client.register_dataset(
+            &ctx.owner,
+            &did,
+            &metadata_id(&ctx.env, 2),
+            &LicenseTerms::PerEpoch(10, 100),
+        );
+        fund_and_approve(&ctx, &ctx.licensee, 100_000_000);
+
+        let t0 = 1_000_000u64;
+        ctx.env.ledger().set_timestamp(t0);
+        let license_id = client.purchase_license(&did, &ctx.licensee, &ctx.token, &0);
+
+        let mut rand = rng_state();
+        let mut settled_sum: i128 = 0;
+        let mut now = t0;
+
+        for _ in 0..300 {
+            now += rand() % 1000;
+            ctx.env.ledger().set_timestamp(now);
+            if let Ok(amount) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                client.settle(&license_id, &ctx.stranger)
+            })) {
+                assert!(amount > 0, "successful settles must pay something");
+                settled_sum += amount;
+            }
+            let lic = client.get_license(&license_id);
+            // settled_total always equals the cumulative settled amount, and
+            // pending payable is never negative.
+            assert_eq!(lic.settled_total, settled_sum);
+            assert!(lic.payable >= 0);
+        }
+
+        // Revoking freezes the clock: nothing further may accrue.
+        client.revoke_license(&did, &ctx.owner, &license_id);
+        let settled_before = client.get_license(&license_id).settled_total;
+        now += 1_000_000;
+        ctx.env.ledger().set_timestamp(now);
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            client.settle(&license_id, &ctx.stranger);
+        }));
+        assert!(
+            res.is_err(),
+            "revoked PerEpoch license must not accrue further"
+        );
+        assert_eq!(
+            client.get_license(&license_id).settled_total,
+            settled_before
+        );
+    }
+
+    // ----------------------------------------------------------------------
     // events
     // ----------------------------------------------------------------------
 

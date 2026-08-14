@@ -36,7 +36,7 @@ and the [Freighter](https://freighter.app) wallet extension.
 
 ```bash
 cd contract
-cargo test --features testutils    # 23 unit tests + doc tests
+cargo test --features testutils    # 26 unit tests (incl. property tests)
 cargo build-wasm                  # target/wasm32v1-none/release/corpuslane.wasm
 ```
 

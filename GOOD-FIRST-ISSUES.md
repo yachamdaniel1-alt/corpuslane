@@ -39,7 +39,7 @@ lists "Revoked-license settlement discrepancy".
 
 > **Status**: Done. `settle` accepts revoked licenses and settles their accrued
 > payable; the PerEpoch clock is frozen at revocation. Tests, README, and
-> SECURITY.md updated (23 contract tests pass). Keep this issue closed.
+> SECURITY.md updated (26 contract tests pass). Keep this issue closed.
 
 ### ~~T2 — Add a backend API smoke test~~ ✅ resolved
 
@@ -110,7 +110,7 @@ Acceptance: new tests pass; existing 21 tests still pass.
 
 ## High (200 points)
 
-### H1 — Property tests for the accounting invariants
+### ~~H1 — Property tests for the accounting invariants~~ ✅ resolved
 
 Add fuzz/property-style tests (e.g. `proptest` or a manual loop harness in the
 `contract` test module) covering the invariants:
@@ -122,6 +122,11 @@ Add fuzz/property-style tests (e.g. `proptest` or a manual loop harness in the
 - revoked licenses reject further `record_usage`.
 
 Acceptance: randomized tests added and passing; CI still green.
+
+> **Status**: Done. A deterministic manual-loop harness was added
+> (`prop_per_query_accounting_invariants_randomized`, `prop_flat_license_never_accrues`,
+> `prop_per_epoch_settled_total_is_monotonic`) — 26 contract tests pass.
+> Keep this issue closed.
 
 ### H2 — Monitor + alerting for the indexer
 
