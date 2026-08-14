@@ -72,6 +72,12 @@ Acceptance: request with `Origin: https://app.example.com` is allowed only when
 that origin is in `CORS_ALLOWED_ORIGIN`; preflight `OPTIONS` works; lint +
 typecheck + build pass.
 
+> ✅ Resolved — `backend/src/index.ts` now mounts the `cors` middleware with a
+> configurable `CORS_ALLOWED_ORIGIN` (comma-separated; default
+> `http://localhost:3000,http://127.0.0.1:3000`). Documented in
+> `backend/.env.example`. Verified with `Origin: http://localhost:3000` against
+> the running API. Keep this issue closed.
+
 ### M2 — Keeper script to keep the contract alive (ledger TTL)
 
 Soroban entries expire (rent/TTL). The contract self-extends TTLs on writes,

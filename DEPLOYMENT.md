@@ -117,6 +117,10 @@ npm run build
 npm start                 # http://localhost:3000
 ```
 
+The backend allows cross-origin requests from the frontend: by default
+`http://localhost:3000` and `http://127.0.0.1:3000`. For other origins set
+`CORS_ALLOWED_ORIGIN` in `backend/.env` (comma-separated list).
+
 Or use the Docker route above, which inlines `NEXT_PUBLIC_*` from
 `CONTRACT_ID` / `SOROBAN_*` for you.
 

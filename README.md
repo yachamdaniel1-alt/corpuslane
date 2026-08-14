@@ -93,6 +93,15 @@ The contract is deployed and exercised on Soroban testnet:
 - The `stellar` CLI (v27.1.0) was used for the deploy and contract calls; see
   [DEPLOYMENT.md](DEPLOYMENT.md) for the exact, validated commands.
 
+### Dashboards
+
+The frontend dashboards render the live testnet data served by the backend API
+(owner wallet and licensee wallet connected via Freighter):
+
+![Owner dashboard](assets/screenshots/owner-dashboard.png)
+
+![Licensee dashboard](assets/screenshots/licensee-dashboard.png)
+
 ## Limitations (be honest with yourself)
 
 - The backend **indexer is read-only**: it mirrors on-chain state, it never

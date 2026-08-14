@@ -37,6 +37,17 @@ Initial release.
   and non-negative accounting; `prop_flat_license_never_accrues`; and
   `prop_per_epoch_settled_total_is_monotonic` including the revocation freeze.
   26 contract tests now pass.
+- **M1 — backend CORS**: the API now mounts `cors` middleware with a
+  configurable `CORS_ALLOWED_ORIGIN` (comma-separated; default
+  `http://localhost:3000,http://127.0.0.1:3000`), documented in
+  `backend/.env.example`. The dashboards can now fetch from the Next.js dev
+  server.
+- **Licensee dashboard data loading**: the licensee page never called
+  `refresh()` on mount or when the connected address changed, so its
+  dataset/license tables stayed empty even after connecting a wallet. Added the
+  missing `useEffect` (the owner page already had it). Captured live
+  dashboard screenshots (owner + licensee) against the testnet-backed API and
+  linked them from the README.
 
 ### Added
 - **Contract** (`contract/`):

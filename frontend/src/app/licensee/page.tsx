@@ -75,6 +75,10 @@ export default function LicenseePage() {
     }
   }, [address]);
 
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
   const handleApproveAndPurchase = async (d: DatasetSummary) => {
     if (!address) return;
     let token: string;

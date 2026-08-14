@@ -1,6 +1,7 @@
 import express from "express";
 import pinoHttp from "pino-http";
 import pino from "pino";
+import cors from "cors";
 import { prisma } from "./db/client";
 import { datasetRoutes } from "./routes/datasets";
 import { licenseRoutes } from "./routes/licenses";
@@ -11,6 +12,14 @@ const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 const app = express();
 
 app.use(pinoHttp({ logger }));
+app.use(
+  cors({
+    origin: process.env.CORS_ALLOWED_ORIGIN
+      ? process.env.CORS_ALLOWED_ORIGIN.split(",").map((o) => o.trim())
+      : ["http://localhost:3000", "http://127.0.0.1:3000"],
+    credentials: false,
+  })
+);
 app.use(express.json());
 
 app.use("/api/datasets", datasetRoutes(prisma));
