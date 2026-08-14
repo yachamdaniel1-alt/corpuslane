@@ -102,7 +102,7 @@ The frontend dashboards render the live testnet data served by the backend API
 
 ![Licensee dashboard](assets/screenshots/licensee-dashboard.png)
 
-## Limitations (be honest with yourself)
+## Limitations
 
 - The backend **indexer is read-only**: it mirrors on-chain state, it never
   writes to the contract. It is an off-chain convenience, not part of the
