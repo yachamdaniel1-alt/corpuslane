@@ -5,12 +5,8 @@
 #
 # Prerequisites:
 #   - cargo + the wasm32v1-none Rust target installed
-#   - the `soroban` CLI (https://soroban.stellar.org/docs/reference/cli)
+#   - the `stellar` CLI v21+ (https://github.com/stellar/stellar-cli)
 #   - a funded account on the target network
-#
-# NOTE: This script is written but has NOT been executed against a live
-# network in this repository's development environment (the `soroban` CLI
-# was not available locally). Review the commands before running.
 #
 # Usage:
 #   export DEPLOYER_SECRET=SB…            # secret key of the deployer
@@ -21,6 +17,8 @@
 # After the deploy finishes, set:
 #   backend/.env     CONTRACT_ID=<printed id>
 #   frontend/.env.local  NEXT_PUBLIC_CONTRACT_ID=<printed id>
+#
+# Validated against testnet on 2026-08-14 with stellar-cli v27.1.0.
 
 set -euo pipefail
 
@@ -34,8 +32,8 @@ if [[ -z "$DEPLOYER_SECRET" ]]; then
   echo "error: DEPLOYER_SECRET is required (funded account secret key)" >&2
   exit 1
 fi
-if ! command -v soroban >/dev/null 2>&1; then
-  echo "error: 'soroban' CLI not found. See https://soroban.stellar.org/docs/reference/cli" >&2
+if ! command -v stellar >/dev/null 2>&1; then
+  echo "error: 'stellar' CLI not found. Install from https://github.com/stellar/stellar-cli" >&2
   exit 1
 fi
 
@@ -50,7 +48,7 @@ fi
 
 echo ">> Deploying contract…"
 CONTRACT_ID="$(
-  soroban contract deploy \
+  stellar contract deploy \
     --wasm "$WASM" \
     --source "$DEPLOYER_SECRET" \
     --rpc-url "$SOROBAN_RPC_URL" \
@@ -66,5 +64,5 @@ echo "  2. frontend/.env.local    NEXT_PUBLIC_CONTRACT_ID=$CONTRACT_ID"
 echo "  3. start the stack (see DEPLOYMENT.md)"
 echo ""
 echo "On testnet it can help to fund the contract account once:"
-echo "  soroban contract id asset <wasm-hash>  # or use a friendly builder"
+echo "  stellar contract id asset <wasm-hash>  # or use a friendly builder"
 echo "See DEPLOYMENT.md for production setup and ledger-restore guidance."

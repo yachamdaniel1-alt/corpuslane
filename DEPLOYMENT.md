@@ -4,19 +4,19 @@ This guide walks through deploying all three layers: the **contract** on
 Soroban testnet, the **backend + indexer** with PostgreSQL, and the
 **frontend**.
 
-> Status note: at the time of writing, docker/docker-compose and the `soroban`
-> CLI were **not available** in the repo&apos;s development environment, so the
-> container stack and `scripts/deploy-testnet.sh` have not been executed here.
-> The instructions below are accurate to the code as written; test each step
-> on your target network before going live.
+> Status note: the contract below has been deployed to Soroban **testnet**
+> (`CAUFA5YVBHOVKEJNLCDY6NLXPOM22ANGTE6PFNMSAHM7LFA2UIIB7BUS`) and the
+> indexer + API were run against it, mirroring a live dataset / license /
+> usage / settlement. docker/docker-compose and `scripts/deploy-testnet.sh`
+> have **not** been exercised in the repo&apos;s development environment, so test
+> those before going live.
 
 ## 0. Prerequisites
 
 - Rust 1.84+ (needed for the `wasm32v1-none` target)
-- `soroban` CLI (testnet deploy)
+- `stellar` CLI v21+ (the Soroban CLI; replaces the deprecated `soroban` CLI)
 - Node 20+, PostgreSQL, and Docker (for the containerized stack)
-- Freighter wallet with a funded testnet account
-  (`soroban`/friendbot to fund)
+- Freighter wallet with a funded testnet account (`friendbot` to fund)
 
 ## 1. Deploy the contract
 
@@ -29,18 +29,46 @@ cd contract
 cargo test --features testutils
 cargo build-wasm
 
-# deploy (interactive or with env, see scripts/deploy-testnet.sh)
+# deploy (see scripts/deploy-testnet.sh)
 export DEPLOYER_SECRET=SB…   # your funded account secret key
 ./scripts/deploy-testnet.sh
 ```
 
-The script prints `CONTRACT_ID` (`C…`). Keep it; it goes into env config
+Or deploy directly with the `stellar` CLI:
+
+```bash
+stellar contract deploy \
+  --wasm contract/target/wasm32v1-none/release/corpuslane.wasm \
+  --source "$DEPLOYER_SECRET" \
+  --rpc-url https://soroban-testnet.stellar.org:443 \
+  --network-passphrase "Test SDF Network ; September 2015"
+```
+
+The deploy prints `CONTRACT_ID` (`C…`). Keep it; it goes into env config
 below.
 
 **Testnet funding:** newly deployed contracts on testnet may need funding /
 ledger-restore (bumping reserve) before they can be written to at scale. Use
 `friendbot` or the RPC&apos;s `sendTransaction` to top the contract account up
 and run any wizard tooling your CLI provides for `restoreFootprint`.
+
+**Exercising the contract (testnet smoke flow):**
+
+```bash
+CID=C…; DID=0100…00; MH=abab…ab   # 32-byte hex ids
+stellar contract invoke --id "$CID" --source "$OWNER_SK" --rpc-url https://soroban-testnet.stellar.org:443 --network-passphrase "Test SDF Network ; September 2015" -- \
+  register_dataset --owner "$OWNER" --dataset_id "$DID" --metadata_hash "$MH" --license_terms '{"PerQuery":"5"}'
+stellar contract invoke --id "$CID" --source "$LICENSEE_SK" --rpc-url https://soroban-testnet.stellar.org:443 --network-passphrase "Test SDF Network ; September 2015" -- \
+  purchase_license --dataset_id "$DID" --licensee "$LICENSEE" --token "$NATIVE_SAC" --payment 0
+# approve the contract to pull payment (native SAC allowance expiry is capped
+# at ~3,110,400 ledgers ahead):
+stellar contract invoke --id "$NATIVE_SAC" --source "$LICENSEE_SK" --rpc-url https://soroban-testnet.stellar.org:443 --network-passphrase "Test SDF Network ; September 2015" -- \
+  approve --from "$LICENSEE" --spender "$CID" --amount 1000000000 --live_until_ledger "$(($(stellar ledger latest-ledger ...) + 3000000))"
+stellar contract invoke --id "$CID" --source "$LICENSEE_SK" --rpc-url https://soroban-testnet.stellar.org:443 --network-passphrase "Test SDF Network ; September 2015" -- \
+  record_usage --license_id 1 --caller "$LICENSEE" --usage_count 3
+stellar contract invoke --id "$CID" --source "$OWNER_SK" --rpc-url https://soroban-testnet.stellar.org:443 --network-passphrase "Test SDF Network ; September 2015" -- \
+  settle --license_id 1 --caller "$OWNER"
+```
 
 ## 2. Backend + indexer
 

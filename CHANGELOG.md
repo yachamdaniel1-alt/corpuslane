@@ -20,6 +20,17 @@ Initial release.
   suite (`backend/src/__tests__/api.test.ts`) covering `/health`,
   `/api/datasets` pagination/filtering/404, and `/api/licenses/:id` 400/404.
   `npm test` now enforces real tests (no more `--passWithNoTests`).
+- **Live testnet deployment + indexer hardening**: the contract was deployed
+  to Soroban testnet and exercised end-to-end (dataset → license → usage →
+  settle). Running the indexer against the live network surfaced three latent
+  bugs, now fixed: (1) `startLedger: 0` is outside the RPC retention window
+  — a fresh indexer now starts behind the tip; (2) stellar-sdk v12 events
+  expose their paging token via `event.id`, not `pagingToken`, so the cursor
+  was never advancing and events re-applied every poll — this duplicated
+  usage/settlement records; (3) `parseTerms` expected the object form of the
+  `LicenseTerms` enum but `scValToNative` yields `[Variant, fields...]`.
+  `UsageRecord`/`Settlement` now carry a unique `eventId` so re-indexing is
+  idempotent. `scripts/deploy-testnet.sh` was updated to the `stellar` CLI.
 
 ### Added
 - **Contract** (`contract/`):

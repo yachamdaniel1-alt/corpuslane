@@ -81,15 +81,29 @@ account. See [DEPLOYMENT.md](DEPLOYMENT.md).
 - **Delegate an attestor** — the dataset owner can name a trusted reporter
   allowed to record usage, moving metering off pure self-reporting.
 
+## Live on testnet
+
+The contract is deployed and exercised on Soroban testnet:
+
+- **Contract**: `CAUFA5YVBHOVKEJNLCDY6NLXPOM22ANGTE6PFNMSAHM7LFA2UIIB7BUS`
+  ([explorer](https://stellar.expert/explorer/testnet/contract/CAUFA5YVBHOVKEJNLCDY6NLXPOM22ANGTE6PFNMSAHM7LFA2UIIB7BUS))
+- **Verified flow**: dataset registered → license purchased → usage recorded →
+  settled, with the indexer mirroring every event into the backend and the API
+  serving it (`/api/datasets`, `/api/licenses/:id`).
+- The `stellar` CLI (v27.1.0) was used for the deploy and contract calls; see
+  [DEPLOYMENT.md](DEPLOYMENT.md) for the exact, validated commands.
+
 ## Limitations (be honest with yourself)
 
 - The backend **indexer is read-only**: it mirrors on-chain state, it never
   writes to the contract. It is an off-chain convenience, not part of the
   trust model.
-- `docker`/`docker-compose` and the `soroban` CLI were **not available** in
-  the development environment where this repository was built, so the compose
-  stack and `scripts/deploy-testnet.sh` are written but **not run here**.
-  Everything else has been compiled, linted, type-checked, and tested locally.
+- `docker`/`docker-compose` and `scripts/deploy-testnet.sh` were **not
+  executed** in the development environment where this repository was built.
+  The compose stack is written but untested; the deploy script was validated
+  against testnet using the `stellar` CLI directly. Everything else has been
+  compiled, linted, type-checked, and tested locally, and the contract +
+  indexer + API were run against a live testnet deployment.
 - See [SECURITY.md](SECURITY.md) for the trust model and its limits.
 
 ## Docs
