@@ -48,6 +48,16 @@ Initial release.
   missing `useEffect` (the owner page already had it). Captured live
   dashboard screenshots (owner + licensee) against the testnet-backed API and
   linked them from the README.
+- **Docker stack validated end-to-end**: `docker compose up --build` now runs
+  and serves correctly against a live testnet deployment (API `/health` OK,
+  dashboards on `:3000`, indexer advancing through ledger pages). Fixes made
+  while bringing it up: (1) added `.dockerignore` so the build context dropped
+  from ~900 MB to ~200 kB (it was shipping `node_modules` and the contract
+  `target/` into the daemon); (2) `docker/Dockerfile.backend` installs
+  `openssl` in all stages — Prisma's engine binary crashed on the Alpine
+  image (`libssl.so.1.1` missing) otherwise; (3) the base images are built
+  with BuildKit (`docker buildx`) instead of the legacy builder, which was
+  orders of magnitude slower on the local VM.
 
 ### Added
 - **Contract** (`contract/`):
@@ -83,7 +93,5 @@ Initial release.
   self-reported-usage trust limit), API, DEPLOYMENT, CONTRIBUTING, LICENSE.
 
 ### Notes
-- `docker compose` and the `soroban` CLI were not run in the development
-  environment; those artifacts are written but unverified end-to-end here.
 - Metered (PerQuery) usage is self-reported unless an attestor is delegated;
   see SECURITY.md.

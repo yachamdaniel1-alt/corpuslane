@@ -107,12 +107,12 @@ The frontend dashboards render the live testnet data served by the backend API
 - The backend **indexer is read-only**: it mirrors on-chain state, it never
   writes to the contract. It is an off-chain convenience, not part of the
   trust model.
-- `docker`/`docker-compose` and `scripts/deploy-testnet.sh` were **not
-  executed** in the development environment where this repository was built.
-  The compose stack is written but untested; the deploy script was validated
-  against testnet using the `stellar` CLI directly. Everything else has been
-  compiled, linted, type-checked, and tested locally, and the contract +
-  indexer + API were run against a live testnet deployment.
+- The full stack has been validated end-to-end: `docker compose up --build`
+  (Postgres + indexer + backend + frontend) was run and verified against a
+  live testnet deployment (`/health` OK, dashboards serving, indexer advancing
+  through ledger pages), and `scripts/deploy-testnet.sh` was executed against
+  Soroban testnet with the `stellar` CLI. The contract, indexer, and API were
+  additionally run directly against the live testnet.
 - See [SECURITY.md](SECURITY.md) for the trust model and its limits.
 
 ## Docs
